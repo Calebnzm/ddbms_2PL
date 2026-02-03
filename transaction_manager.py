@@ -5,10 +5,10 @@ This module coordinates transactions with the lock manager and node manager.
 Implements the full transaction lifecycle with Strict 2PL semantics.
 """
 
-import sqlite3
+
 from typing import Dict, Optional, Any
 from lock_manager import LockManager, LockType
-from transaction import Transaction, TransactionState
+from transaction import Transaction, TransactionState, OperationType, TransactionType
 from node_manager import NodeManager
 
 
@@ -35,37 +35,79 @@ class TransactionManager:
         self.node_manager = node_manager
         self.lock_manager = LockManager(lock_timeout=lock_timeout)
         self.active_transactions: Dict[int, Transaction] = {}
-        self._connections: Dict[int, Dict[str, sqlite3.Connection]] = {}  # txn_id -> {node_name: conn}
+        self.active_transactions: Dict[int, Transaction] = {}
     
-    def begin_transaction(self) -> Transaction:
+    def execute_transaction(self, txn: Transaction) -> bool:
         """
-        Begin a new transaction.
+        Execute a transaction based on its high-level type.
         
+        Args:
+            txn: The transaction to execute
+            
         Returns:
-            A new Transaction object in ACTIVE state
+            True if committed successfully, False if aborted
         """
-        txn = Transaction()
         self.active_transactions[txn.txn_id] = txn
-        self._connections[txn.txn_id] = {}
-        print(f"[TxnManager] Started transaction {txn.txn_id}")
-        return txn
+        print(f"[TxnManager] Started transaction {txn.txn_id} ({txn.txn_type.value})")
+        
+        try:
+            if txn.txn_type == TransactionType.TRANSFER:
+                self._resolve_transfer(txn)
+            elif txn.txn_type == TransactionType.WITHDRAW:
+                self._resolve_withdraw(txn)
+            elif txn.txn_type == TransactionType.DEPOSIT:
+                self._resolve_deposit(txn)
+            else:
+                raise ValueError(f"Unknown transaction type: {txn.txn_type}")
+            
+            return self.commit_transaction(txn)
+            
+        except Exception as e:
+            print(f"[TxnManager] Execution failed for txn {txn.txn_id}: {e}")
+            self.abort_transaction(txn)
+            return False
+
+    def _resolve_transfer(self, txn: Transaction) -> None:
+        from_acc = txn.args["from_account"]
+        to_acc = txn.args["to_account"]
+        amount = txn.args["amount"]
+        
+        from_bal = self._execute_read(txn, from_acc)
+        to_bal = self._execute_read(txn, to_acc)
+        
+        if from_bal is None or to_bal is None:
+            raise RuntimeError("Account not found")
+        if from_bal < amount:
+            raise RuntimeError("Insufficient funds")
+            
+        self._execute_write(txn, from_acc, from_bal - amount)
+        self._execute_write(txn, to_acc, to_bal + amount)
+
+    def _resolve_withdraw(self, txn: Transaction) -> None:
+        account_id = txn.args["account_id"]
+        amount = txn.args["amount"]
+        
+        balance = self._execute_read(txn, account_id)
+        if balance is None:
+            raise RuntimeError("Account not found")
+        if balance < amount:
+            raise RuntimeError("Insufficient funds")
+            
+        self._execute_write(txn, account_id, balance - amount)
+
+    def _resolve_deposit(self, txn: Transaction) -> None:
+        account_id = txn.args["account_id"]
+        amount = txn.args["amount"]
+        
+        balance = self._execute_read(txn, account_id)
+        if balance is None:
+            raise RuntimeError("Account not found")
+            
+        self._execute_write(txn, account_id, balance + amount)
     
-    def _get_connection(self, txn: Transaction, node_name: str) -> sqlite3.Connection:
-        """Get or create a connection for a transaction to a specific node"""
-        if node_name not in self._connections[txn.txn_id]:
-            db_path = self.node_manager.node_files[node_name]
-            conn = sqlite3.connect(db_path)
-            self._connections[txn.txn_id][node_name] = conn
-        return self._connections[txn.txn_id][node_name]
+
     
-    def _close_connections(self, txn: Transaction) -> None:
-        """Close all connections for a transaction"""
-        if txn.txn_id in self._connections:
-            for conn in self._connections[txn.txn_id].values():
-                conn.close()
-            del self._connections[txn.txn_id]
-    
-    def execute_read(self, txn: Transaction, account_id: int) -> Optional[int]:
+    def _execute_read(self, txn: Transaction, account_id: int) -> Optional[int]:
         """
         Execute a read operation within a transaction.
         
@@ -97,19 +139,10 @@ class TransactionManager:
         txn.add_lock(node_name, account_id, "S")
         
         # Read the balance
-        conn = self._get_connection(txn, node_name)
-        cursor = conn.cursor()
-        cursor.execute("SELECT balance FROM accounts WHERE account_id = ?", (account_id,))
-        result = cursor.fetchone()
-        
-        if result:
-            balance = result[0]
-            txn.record_read(node_name, account_id, balance)
-            print(f"[TxnManager] Txn {txn.txn_id} read account {account_id}: balance = {balance}")
-            return balance
-        return None
+        # Read the balance using NodeManager
+        return self.node_manager.read_balance(account_id)
     
-    def execute_write(self, txn: Transaction, account_id: int, balance: int) -> bool:
+    def _execute_write(self, txn: Transaction, account_id: int, balance: int) -> bool:
         """
         Execute a write operation within a transaction.
         
@@ -146,13 +179,11 @@ class TransactionManager:
         txn.add_lock(node_name, account_id, "X")
         
         # Read original value if not already read (for potential rollback)
+        # Read original value if not already read (for potential rollback)
         if txn.get_original_value(account_id) is None:
-            conn = self._get_connection(txn, node_name)
-            cursor = conn.cursor()
-            cursor.execute("SELECT balance FROM accounts WHERE account_id = ?", (account_id,))
-            result = cursor.fetchone()
-            if result:
-                txn.record_read(node_name, account_id, result[0])
+            current_balance = self.node_manager.read_balance(account_id)
+            if current_balance is not None:
+                txn.record_read(node_name, account_id, current_balance)
         
         # Buffer the write
         txn.buffer_write(node_name, account_id, balance)
@@ -188,8 +219,8 @@ class TransactionManager:
             raise ValueError("Transfer amount must be positive")
         
         # Read both balances (acquires shared locks)
-        from_balance = self.execute_read(txn, from_account)
-        to_balance = self.execute_read(txn, to_account)
+        from_balance = self._execute_read(txn, from_account)
+        to_balance = self._execute_read(txn, to_account)
         
         if from_balance is None:
             raise RuntimeError(f"Source account {from_account} not found")
@@ -200,8 +231,8 @@ class TransactionManager:
             raise RuntimeError(f"Insufficient balance: {from_balance} < {amount}")
         
         # Write new balances (acquires exclusive locks, upgrading from shared)
-        self.execute_write(txn, from_account, from_balance - amount)
-        self.execute_write(txn, to_account, to_balance + amount)
+        self._execute_write(txn, from_account, from_balance - amount)
+        self._execute_write(txn, to_account, to_balance + amount)
         
         print(f"[TxnManager] Txn {txn.txn_id} transfer: {amount} from {from_account} to {to_account}")
         return True
@@ -225,13 +256,7 @@ class TransactionManager:
             # Apply all buffered writes
             write_buffer = txn.get_write_buffer()
             for op in write_buffer:
-                conn = self._get_connection(txn, op.node_name)
-                cursor = conn.cursor()
-                cursor.execute(
-                    "UPDATE accounts SET balance = ? WHERE account_id = ?",
-                    (op.value, op.account_id)
-                )
-                conn.commit()
+                self.node_manager.write_balance(op.account_id, op.value)
             
             # Mark transaction as committed
             txn.commit()
@@ -240,7 +265,6 @@ class TransactionManager:
             self.lock_manager.release_all_locks(txn.txn_id)
             
             # Cleanup
-            self._close_connections(txn)
             del self.active_transactions[txn.txn_id]
             
             print(f"[TxnManager] Transaction {txn.txn_id} committed successfully")
@@ -271,9 +295,7 @@ class TransactionManager:
         # Release all locks
         self.lock_manager.release_all_locks(txn.txn_id)
         
-        # Cleanup connections
-        self._close_connections(txn)
-        
+        # Cleanup
         if txn.txn_id in self.active_transactions:
             del self.active_transactions[txn.txn_id]
         

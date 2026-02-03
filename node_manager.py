@@ -47,14 +47,18 @@ class NodeManager:
             conn.close()
         print(f"In-memory account index built. Next account ID: {self.global_account_id}")
 
-    def create_account(self, city: str, initial_balance: int = 1000) -> int:
+    def create_account(self, city: str, initial_balance: int = 1000, account_id: int = None) -> int:
         """Create a new account with a unique global ID"""
         node_name = self.get_node_for_city(city)
         if node_name is None:
             raise ValueError(f"No node found for city '{city}'.")
-
-        account_id = self.global_account_id
-        self.global_account_id += 1
+        
+        if account_id is None:
+            account_id = self.global_account_id
+            self.global_account_id += 1
+        elif account_id >= self.global_account_id:
+            # Update global counter if we import a higher ID
+            self.global_account_id = account_id + 1
 
         conn = sqlite3.connect(self.node_files[node_name])
         cursor = conn.cursor()
@@ -111,7 +115,9 @@ class NodeManager:
     def add_accounts_from_csv(self, csv_file: str) -> None:
         accounts_df = pd.read_csv(csv_file)
         for _, row in accounts_df.iterrows():
-            self.create_account(row['city'], int(row.get('balance', 1000)))
+            # Check if account_id exists in CSV
+            acc_id = int(row['account_id']) if 'account_id' in row else None
+            self.create_account(row['city'], int(row.get('balance', 1000)), account_id=acc_id)
 
     def get_node_for_city(self, city: str) -> Optional[str]:
         for node in self.config['nodes']:

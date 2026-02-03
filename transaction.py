@@ -8,7 +8,19 @@ Transactions follow the growing and shrinking phases for lock acquisition/releas
 from enum import Enum
 from typing import List, Tuple, Optional, Any
 from dataclasses import dataclass, field
+import threading
 
+
+class TransactionType(Enum):
+    """High-level transaction types"""
+    TRANSFER = "transfer"
+    WITHDRAW = "withdraw"
+    DEPOSIT = "deposit"
+
+class OperationType(Enum):
+    """Types of operations in a transaction"""
+    READ = "read"
+    WRITE = "write"
 
 class TransactionState(Enum):
     """Possible states of a transaction"""
@@ -25,11 +37,11 @@ class TransactionPhase(Enum):
 
 @dataclass
 class Operation:
-    """Represents a buffered write operation"""
-    op_type: str              # "write"
+    """Represents a transaction operation"""
+    op_type: OperationType
     account_id: int
-    value: Any                # New balance value
-    node_name: str
+    value: Any = None                # New balance value (for write)
+    node_name: str = ""              # Resolved at runtime
 
 
 @dataclass 
@@ -61,7 +73,6 @@ class Transaction:
     @classmethod
     def _get_next_id(cls) -> int:
         """Thread-safe transaction ID generation"""
-        import threading
         if cls._id_lock is None:
             cls._id_lock = threading.Lock()
         with cls._id_lock:
@@ -69,16 +80,20 @@ class Transaction:
             cls._next_txn_id += 1
             return txn_id
     
-    def __init__(self, txn_id: Optional[int] = None):
+    def __init__(self, txn_type: TransactionType = None, args: dict = None, txn_id: Optional[int] = None):
         """
         Initialize a new transaction.
         
         Args:
+            txn_type: High-level transaction type (TRANSFER, WITHDRAW, DEPOSIT)
+            args: Dictionary of arguments for the transaction type
             txn_id: Optional transaction ID. If not provided, auto-generates one.
         """
         self.txn_id = txn_id if txn_id is not None else Transaction._get_next_id()
         self.state = TransactionState.ACTIVE
         self.phase = TransactionPhase.GROWING
+        self.txn_type = txn_type
+        self.args = args if args else {}
         self.held_locks: List[LockHeld] = []
         self.write_buffer: List[Operation] = []
         self.read_set: List[Tuple[str, int]] = []  # (node_name, account_id)
@@ -138,7 +153,7 @@ class Transaction:
             raise RuntimeError(f"Cannot write: Transaction {self.txn_id} is {self.state.value}")
         
         self.write_buffer.append(Operation(
-            op_type="write",
+            op_type=OperationType.WRITE,
             account_id=account_id,
             value=value,
             node_name=node_name

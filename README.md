@@ -104,3 +104,57 @@ nm.add_accounts_from_csv("accounts.csv")
 
 - **`get_node_for_city(city)`**: Returns the node name responsible for the given city based on the config.
 - **`get_node_for_account(account_id)`**: Returns the node name where the account resides using the in-memory index.
+
+# Transaction Management
+
+The system implements **Strict Two-Phase Locking (SS2PL)** to ensure serializability and data consistency across distributed nodes.
+
+## Usage
+
+Transactions are defined declaratively using `TransactionType` and executed by `TransactionManager`.
+
+### 1. Transfer
+Transfers an amount between two accounts atomically.
+```python
+from transaction_manager import TransactionManager
+from transaction import Transaction, TransactionType
+
+tm = TransactionManager(nm)
+
+txn = Transaction(
+    txn_type=TransactionType.TRANSFER,
+    args={"from_account": 1001, "to_account": 3001, "amount": 500}
+)
+
+tm.execute_transaction(txn)
+```
+
+### 2. Deposit
+Deposits money into an account.
+```python
+txn = Transaction(
+    txn_type=TransactionType.DEPOSIT,
+    args={"account_id": 1001, "amount": 1000}
+)
+tm.execute_transaction(txn)
+```
+
+### 3. Withdraw
+Withdraws money from an account (fails if insufficient funds).
+```python
+txn = Transaction(
+    txn_type=TransactionType.WITHDRAW,
+    args={"account_id": 1001, "amount": 200}
+)
+tm.execute_transaction(txn)
+```
+
+## How It Works
+
+1.  **High-Level Definition**: You define *what* you want to do (e.g., "Transfer 500").
+2.  **Resolution**: `TransactionManager` resolves this into specific **READ** and **WRITE** operations.
+3.  **Locking (2PL)**:
+    *   **Reads** acquire **Shared (S)** locks.
+    *   **Writes** acquire **Exclusive (X)** locks.
+    *   Locks are held until the transaction commits or aborts.
+4.  **Execution**: `NodeManager` performs the physical database updates.
