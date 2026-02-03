@@ -1,0 +1,64 @@
+[[nodes]]
+name = "kisumu"
+db_path = "database_nodes/kisumu.db"
+counties = [
+  "Kisumu",
+  "Siaya",
+  "Homa Bay",
+  "Migori",
+  "Kisii",
+  "Nyamira",
+  "Kakamega",
+  "Vihiga",
+  "Bungoma",
+  "Busia",
+  "Trans Nzoia",
+  "West Pokot",
+  "Turkana",
+  "Uasin Gishu",
+  "Elgeyo Marakwet",
+  "Nandi",
+  "Kericho",
+  "Bomet"
+]
+
+[[nodes]]
+name = "nairobi"
+db_path = "database_nodes/nairobi.db"
+counties = [
+  "Nairobi",
+  "Kiambu",
+  "Murang'a",
+  "Nyeri",
+  "Kirinyaga",
+  "Nyandarua",
+  "Machakos",
+  "Makueni",
+  "Kitui",
+  "Embu",
+  "Meru",
+  "Tharaka-Nithi",
+  "Isiolo",
+  "Marsabit",
+  "Laikipia",
+  "Nakuru",
+  "Narok",
+  "Kajiado",
+  "Baringo",
+  "Samburu"
+]
+
+[[nodes]]
+name = "mombasa"
+db_path = "database_nodes/mombasa.db"
+counties = [
+  "Mombasa",
+  "Kwale",
+  "Kilifi",
+  "Tana River",
+  "Lamu",
+  "Taita Taveta",
+  "Garissa",
+  "Wajir",
+  "Mandera"
+]   
