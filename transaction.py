@@ -9,6 +9,9 @@ from enum import Enum
 from typing import List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 import threading
+from logger_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class TransactionType(Enum):
@@ -99,7 +102,7 @@ class Transaction:
         self.read_set: List[Tuple[str, int]] = []  # (node_name, account_id)
         self._original_values: dict = {}  # For rollback: account_id -> original_value
         
-        print(f"[Transaction] Txn {self.txn_id} started")
+        logger.info(f"[Transaction] Txn {self.txn_id} started")
     
     def add_lock(self, node_name: str, account_id: int, lock_type: str) -> None:
         """
@@ -158,7 +161,7 @@ class Transaction:
             value=value,
             node_name=node_name
         ))
-        print(f"[Transaction] Txn {self.txn_id} buffered write: account {account_id} = {value}")
+        logger.debug(f"[Transaction] Txn {self.txn_id} buffered write: account {account_id} = {value}")
     
     def get_write_buffer(self) -> List[Operation]:
         """Get the list of buffered write operations"""
@@ -181,7 +184,7 @@ class Transaction:
         """
         if self.phase == TransactionPhase.GROWING:
             self.phase = TransactionPhase.SHRINKING
-            print(f"[Transaction] Txn {self.txn_id} entered shrinking phase")
+            logger.debug(f"[Transaction] Txn {self.txn_id} entered shrinking phase")
     
     def commit(self) -> None:
         """
@@ -194,7 +197,7 @@ class Transaction:
         
         self.enter_shrinking_phase()
         self.state = TransactionState.COMMITTED
-        print(f"[Transaction] Txn {self.txn_id} committed ({len(self.write_buffer)} writes, {len(self.held_locks)} locks)")
+        logger.info(f"[Transaction] Txn {self.txn_id} committed ({len(self.write_buffer)} writes, {len(self.held_locks)} locks)")
     
     def abort(self) -> None:
         """
@@ -207,7 +210,24 @@ class Transaction:
         
         self.enter_shrinking_phase()
         self.state = TransactionState.ABORTED
-        print(f"[Transaction] Txn {self.txn_id} aborted")
+        logger.info(f"[Transaction] Txn {self.txn_id} aborted")
+
+    def reset(self) -> None:
+        """
+        Reset transaction state for retry.
+        
+        Clears all locks, buffers, and sets state back to ACTIVE.
+        """
+        if self.state != TransactionState.ABORTED:
+            raise RuntimeError(f"Cannot reset: Transaction {self.txn_id} is {self.state.value} (must be aborted first)")
+            
+        self.state = TransactionState.ACTIVE
+        self.phase = TransactionPhase.GROWING
+        self.held_locks.clear()
+        self.write_buffer.clear()
+        self.read_set.clear()
+        self._original_values.clear()
+        logger.info(f"[Transaction] Txn {self.txn_id} reset for retry")
     
     def is_active(self) -> bool:
         """Check if transaction is still active"""
