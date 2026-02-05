@@ -1,0 +1,53 @@
+2026-02-04 10:58:31 - node_manager - INFO - Node 'kisumu' created at database_nodes/kisumu.db.
+2026-02-04 10:58:31 - node_manager - INFO - Node 'nairobi' created at database_nodes/nairobi.db.
+2026-02-04 10:58:31 - node_manager - INFO - Node 'mombasa' created at database_nodes/mombasa.db.
+2026-02-04 10:58:31 - node_manager - INFO - In-memory account index built. Next account ID: 1
+2026-02-04 10:58:31 - node_manager - INFO - Account '1' added to node 'kisumu' with balance 10000
+2026-02-04 10:58:31 - node_manager - INFO - Account '2' added to node 'nairobi' with balance 5000
+2026-02-04 10:58:31 - node_manager - INFO - Account '3' added to node 'mombasa' with balance 8000
+2026-02-04 10:58:31 - node_manager - INFO - Account '4' added to node 'kisumu' with balance 3000
+2026-02-04 10:58:31 - transaction - INFO - [Transaction] Txn 1 started
+2026-02-04 10:58:31 - transaction_manager - INFO - [TxnManager] Started transaction 1 (transfer)
+2026-02-04 10:58:31 - lock_manager - INFO - [LockManager] Txn 1 acquired S lock on ('kisumu', 1)
+2026-02-04 10:58:31 - lock_manager - INFO - [LockManager] Txn 1 acquired S lock on ('nairobi', 2)
+2026-02-04 10:58:31 - lock_manager - INFO - [LockManager] Txn 1 upgraded to X lock on ('kisumu', 1)
+2026-02-04 10:58:31 - lock_manager - INFO - [LockManager] Txn 1 upgraded to X lock on ('nairobi', 2)
+2026-02-04 10:58:31 - node_manager - INFO - Account '1' balance updated to 9500 on node 'kisumu'
+2026-02-04 10:58:31 - node_manager - INFO - Account '2' balance updated to 5500 on node 'nairobi'
+2026-02-04 10:58:31 - transaction - INFO - [Transaction] Txn 1 committed (2 writes, 2 locks)
+2026-02-04 10:58:31 - lock_manager - INFO - [LockManager] Txn 1 released all locks (2 total)
+2026-02-04 10:58:32 - transaction - INFO - [Transaction] Txn 2 started
+2026-02-04 10:58:32 - transaction_manager - INFO - [TxnManager] Started transaction 2 (withdraw)
+2026-02-04 10:58:32 - lock_manager - INFO - [LockManager] Txn 2 acquired S lock on ('mombasa', 3)
+2026-02-04 10:58:32 - transaction_manager - ERROR - [TxnManager] Execution failed for txn 2: Insufficient funds
+2026-02-04 10:58:32 - transaction - INFO - [Transaction] Txn 2 aborted
+2026-02-04 10:58:32 - lock_manager - INFO - [LockManager] Txn 2 released all locks (1 total)
+2026-02-04 10:58:32 - transaction_manager - INFO - [TxnManager] Transaction 2 aborted
+2026-02-04 10:58:33 - transaction - INFO - [Transaction] Txn 3 started
+2026-02-04 10:58:33 - transaction - INFO - [Transaction] Txn 4 started
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Starting Thread A (Txn 3) - Attempt 1
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Starting Thread B (Txn 4) - Attempt 1
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Txn 3 acquiring X lock on Kisumu (1)
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Txn 4 acquiring X lock on Nairobi (2)
+2026-02-04 10:58:33 - lock_manager - INFO - [LockManager] Txn 3 acquired X lock on ('Kisumu', 1)
+2026-02-04 10:58:33 - lock_manager - INFO - [LockManager] Txn 4 acquired X lock on ('Nairobi', 2)
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Txn 3 acquiring X lock on Nairobi (2)
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Txn 4 acquiring X lock on Kisumu (1)
+2026-02-04 10:58:33 - lock_manager - WARNING - [LockManager] DEADLOCK DETECTED involving 3!
+2026-02-04 10:58:33 - __main__ - WARNING - [Demo] Txn 4 failed: Deadlock detected involving transaction 4
+2026-02-04 10:58:33 - transaction - INFO - [Transaction] Txn 4 aborted
+2026-02-04 10:58:33 - lock_manager - INFO - [LockManager] Txn 4 released all locks (1 total)
+2026-02-04 10:58:33 - lock_manager - INFO - [LockManager] Txn 3 acquired X lock on ('Nairobi', 2)
+2026-02-04 10:58:33 - transaction_manager - INFO - [TxnManager] Transaction 4 aborted
+2026-02-04 10:58:33 - __main__ - INFO - [Demo] Txn 3 finished successfully
+2026-02-04 10:58:33 - transaction - INFO - [Transaction] Txn 3 committed (0 writes, 0 locks)
+2026-02-04 10:58:33 - lock_manager - INFO - [LockManager] Txn 3 released all locks (2 total)
+2026-02-04 10:58:34 - transaction - INFO - [Transaction] Txn 4 reset for retry
+2026-02-04 10:58:34 - __main__ - INFO - [Demo] Starting Thread B (Txn 4) - Attempt 2
+2026-02-04 10:58:34 - __main__ - INFO - [Demo] Txn 4 acquiring X lock on Nairobi (2)
+2026-02-04 10:58:34 - lock_manager - INFO - [LockManager] Txn 4 acquired X lock on ('Nairobi', 2)
+2026-02-04 10:58:35 - __main__ - INFO - [Demo] Txn 4 acquiring X lock on Kisumu (1)
+2026-02-04 10:58:35 - lock_manager - INFO - [LockManager] Txn 4 acquired X lock on ('Kisumu', 1)
+2026-02-04 10:58:35 - __main__ - INFO - [Demo] Txn 4 finished successfully
+2026-02-04 10:58:35 - transaction - INFO - [Transaction] Txn 4 committed (0 writes, 0 locks)
+2026-02-04 10:58:35 - lock_manager - INFO - [LockManager] Txn 4 released all locks (2 total)

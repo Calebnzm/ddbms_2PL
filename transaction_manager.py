@@ -66,11 +66,11 @@ class TransactionManager:
             True if committed successfully, False if aborted
         """
         self.active_transactions[txn.txn_id] = txn
-        self.active_transactions[txn.txn_id] = txn
         logger.info(f"[TxnManager] Started transaction {txn.txn_id} ({txn.txn_type.value})")
         
         max_retries = 3
         for attempt in range(max_retries):
+            self.active_transactions[txn.txn_id] = txn
             try:
                 if attempt > 0:
                      logger.info(f"[TxnManager] Retrying transaction {txn.txn_id} (Attempt {attempt+1}/{max_retries})")

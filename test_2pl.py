@@ -17,6 +17,8 @@ import threading
 import time
 from node_manager import NodeManager
 from transaction_manager import TransactionManager
+from transaction import Transaction, TransactionState, TransactionType
+from lock_manager import DeadlockException
 
 
 def setup_test_environment():
